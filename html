@@ -2,76 +2,168 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My First Web Platform</title>
+  <title>Realistic Slithering Snake</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      max-width: 600px;
-      margin: 50px auto;
-      padding: 20px;
-      text-align: center;
-      background-color: #f4f4f9;
-      color: #333;
+      margin: 0;
+      overflow: hidden;
+      background-color: #121820;
     }
-    .card {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    input {
-      padding: 10px;
-      width: 65%;
-      margin-right: 5px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    button {
-      padding: 10px 15px;
-      background-color: #2da44e;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover { background-color: #2c974b; }
-    ul { list-style: none; padding: 0; margin-top: 20px; }
-    li {
-      background: #fff;
-      padding: 10px;
-      margin: 8px 0;
-      border-radius: 4px;
-      border: 1px solid #e1e4e8;
-      text-align: left;
+    canvas {
+      display: block;
     }
   </style>
 </head>
 <body>
+<canvas id="canvas"></canvas>
 
-  <div class="card">
-    <h1>My Custom Platform</h1>
-    <p>Post updates or store temporary notes below:</p>
-    
-    <input type="text" id="userInput" placeholder="Type a message or note...">
-    <button onclick="addPost()">Publish</button>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
 
-    <ul id="postList"></ul>
-  </div>
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-  <script>
-    function addPost() {
-      const input = document.getElementById('userInput');
-      const text = input.value.trim();
-      
-      if (text !== '') {
-        const li = document.createElement('li');
-        li.textContent = text;
-        document.getElementById('postList').appendChild(li);
-        input.value = '';
-      }
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+const target = { x: canvas.width / 2, y: canvas.height / 2 };
+window.addEventListener('mousemove', (e) => {
+  target.x = e.clientX;
+  target.y = e.clientY;
+});
+
+class Segment {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.angle = 0;
+  }
+}
+
+class Snake {
+  constructor(segmentCount = 45, segmentDist = 10) {
+    this.segmentDist = segmentDist;
+    this.segments = [];
+    this.waveOffset = 0;
+    this.speed = 0;
+
+    for (let i = 0; i < segmentCount; i++) {
+      this.segments.push(new Segment(canvas.width / 2, canvas.height / 2 + i * segmentDist));
     }
-  </script>
+  }
 
+  update() {
+    const head = this.segments[0];
+
+    // Distance and direction to mouse
+    const dx = target.x - head.x;
+    const dy = target.y - head.y;
+    const dist = Math.hypot(dx, dy);
+
+    const baseAngle = Math.atan2(dy, dx);
+    this.speed = Math.min(dist * 0.05, 4.5);
+
+    // Add lateral undulation (slither wiggle) when moving
+    if (this.speed > 0.1) {
+      this.waveOffset += this.speed * 0.12;
+    }
+    
+    // Slither angle oscillates around target angle
+    const slitherAngle = baseAngle + Math.sin(this.waveOffset) * 0.35 * (this.speed / 4.5);
+
+    // Move head forward
+    head.x += Math.cos(slitherAngle) * this.speed;
+    head.y += Math.sin(slitherAngle) * this.speed;
+    head.angle = slitherAngle;
+
+    // Follow mechanics (Inverse Kinematics) for body segments
+    for (let i = 1; i < this.segments.length; i++) {
+      const prev = this.segments[i - 1];
+      const curr = this.segments[i];
+
+      const segDx = prev.x - curr.x;
+      const segDy = prev.y - curr.y;
+      const segAngle = Math.atan2(segDy, segDx);
+
+      curr.angle = segAngle;
+      curr.x = prev.x - Math.cos(segAngle) * this.segmentDist;
+      curr.y = prev.y - Math.sin(segAngle) * this.segmentDist;
+    }
+  }
+
+  draw() {
+    const total = this.segments.length;
+
+    // Render from tail to head so head sits on top
+    for (let i = total - 1; i >= 0; i--) {
+      const seg = this.segments[i];
+      
+      // Calculate body width (tapered head, thick midbody, thin tail)
+      const t = i / total;
+      const radius = Math.sin(t * Math.PI) * 11 + 3;
+
+      ctx.save();
+      ctx.translate(seg.x, seg.y);
+      ctx.rotate(seg.angle);
+
+      // Body Segment
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fillStyle = i % 2 === 0 ? '#2e7d32' : '#388e3c'; // Alternating scales
+      ctx.fill();
+      ctx.strokeStyle = '#1b5e20';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Head Details
+      if (i === 0) {
+        // Eyes
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(5, -radius + 3, 3, 0, Math.PI * 2);
+        ctx.arc(5, radius - 3, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.arc(6, -radius + 3, 1.5, 0, Math.PI * 2);
+        ctx.arc(6, radius - 3, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Forked tongue flickers when moving fast
+        if (this.speed > 0.5 && Math.sin(this.waveOffset * 2) > 0.4) {
+          ctx.strokeStyle = '#d32f2f';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(radius, 0);
+          ctx.lineTo(radius + 10, 0);
+          ctx.lineTo(radius + 14, -4);
+          ctx.moveTo(radius + 10, 0);
+          ctx.lineTo(radius + 14, 4);
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+    }
+  }
+}
+
+const snake = new Snake(40, 9);
+
+function animate() {
+  ctx.fillStyle = 'rgba(18, 24, 32, 0.3)'; // Trail effect
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  snake.update();
+  snake.draw();
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
 </body>
 </html>
